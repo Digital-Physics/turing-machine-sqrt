@@ -1,8 +1,11 @@
+<!-- update needed: 1) There is one Tape not an E and F tape. Mostly converted but may still be buggy. -->
+<!-- update needed: 2a) There should be a render after each step in a process, not just at m-config state change -->
+<!-- update needed: 2b) All subprocesses that run in a m-config state should be handled under the if condition with renders in between steps. substate not needed; don't leave and come back into function or you'll be checking the symbol again before completing all subprocesses.-->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Turing Machine Simulator — √2 (Faithful to the Book)</title>
+<title>Turing Machine Simulator – √2 (faithful to the book)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   :root {
@@ -12,8 +15,8 @@
     --accent: #6ee7b7;
     --warn: #fbbf24;
     --danger: #f87171;
-    --fcell: #1d2330;      /* F-squares background */
-    --ecell: #1a202c;      /* E-squares background */
+    --fcell: #1d2330;      /* F-squares row background */
+    --ecell: #1a202c;      /* E-squares row background */
     --head: #93c5fd;       /* head highlight */
     --marker-x: #f59e0b;
     --marker-y: #f472b6;
@@ -54,7 +57,7 @@
     margin-bottom: 14px;
   }
   .controls button, .controls select {
-    background: #1d2736;
+    background: #1d2336;
     color: var(--fg);
     border: 1px solid #2c3647;
     border-radius: 10px;
@@ -80,15 +83,16 @@
     padding: 14px;
   }
   .tape {
-    display: grid;
-    grid-template-columns: 90px 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    align-items: start;
   }
-  .label {
+  .tape-label {
     color: var(--muted);
-    padding-top: 16px;
     font-weight: 700;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 8px;
   }
   .row {
     overflow-x: auto;
@@ -100,11 +104,11 @@
   .cells {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(40px, 48px);
+    grid-auto-columns: minmax(32px, 40px);
     gap: 6px;
   }
   .cell {
-    height: 52px;
+    height: 40px;
     border-radius: 8px;
     display: grid;
     place-items: center;
@@ -112,24 +116,15 @@
     letter-spacing: 0.4px;
     border: 1px solid #273149;
     position: relative;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
   }
+  .cell.f { background: var(--fcell); }
+  .cell.e { background: var(--ecell); }
   .cell .idx {
     position: absolute;
-    top: -10px;
+    top: -8px;
     font-size: 10px;
     color: var(--muted);
-    font-weight: 400;
   }
-  .cell .type {
-    position: absolute;
-    bottom: 2px;
-    font-size: 10px;
-    color: var(--muted);
-    font-weight: 600;
-  }
-  .cell.f-sq { background-color: var(--fcell); }
-  .cell.e-sq { background-color: var(--ecell); }
   .cell.head { outline: 3px solid var(--head); z-index: 2; }
   .legend {
     display: flex;
@@ -171,7 +166,6 @@
   .hl1 { color: var(--rt-1); font-weight: 700; }
   .hlh { color: var(--head); font-weight: 700; }
   .hls { color: var(--accent); font-weight: 700; }
-  .hldigit { font-weight: 900; font-size: 14px; }
   footer {
     text-align: center;
     color: var(--muted);
@@ -182,8 +176,8 @@
 </head>
 <body>
   <header>
-    <h1>√2 Turing Machine — Faithful Step-by-Step Simulator</h1>
-    <p>A single, interleaved tape. F-squares hold digits, E-squares hold markers. Head moves one cell at a time.</p>
+    <h1>√2 Turing Machine – faithful step-by-step simulator</h1>
+    <p>Interleaved F-squares (digits) and E-squares (workspace) like in the book. Step through the exact m-configurations.</p>
   </header>
 
   <div class="wrap">
@@ -211,360 +205,1098 @@
 
     <div class="board">
       <div class="tape">
-        <div class="label">Tape</div>
-        <div class="row"><div id="tapeCells" class="cells"></div></div>
+        <div class="tape-label">Interleaved F-squares and E-squares</div>
+        <div class="row"><div id="interleaved" class="cells"></div></div>
       </div>
       <div class="legend">
-        <span class="chip">F-sq (even) = Digit</span>
-        <span class="chip">E-sq (odd) = Marker</span>
         <span class="chip"><span class="dot x"></span>x marker</span>
         <span class="chip"><span class="dot y"></span>y marker</span>
-        <span class="chip"><span class="dot z"></span>z marker</span>
+        <span class="chip"><span class="dot z"></span>z marker (= x & y coincide)</span>
         <span class="chip"><span class="dot r0"></span>r/s/t → 0</span>
         <span class="chip"><span class="dot r1"></span>u/v/w → 1</span>
+        <span>Head = blue outline | F-squares = darker | E-squares = lighter</span>
       </div>
       <div id="log" class="log"></div>
     </div>
 
     <footer>
-      Built to mirror the states and operations described in the book’s √2 machine (Petzold). It logs every micro-step: reads, writes, moves, and state transitions.
+      Built to mirror the states and markers described in the book's √2 machine (Petzold). It logs every micro-step: reads, writes, moves, and state transitions.
     </footer>
   </div>
 
 <script>
 /* ============================================================
-   √2 Turing Machine (Faithful Book Implementation)
+   √2 Turing Machine (faithful visual simulator)
+   ------------------------------------------------------------
+   This simulator implements the m-configurations from the book
+   "The Annotated Turing" by Charles Petzold. Each state function
+   corresponds to an m-configuration table from the book.
    ============================================================ */
 
+/*** Tape model ***/
 const BLANK = " ";
 const SENTINEL = "@";
+const RT0 = new Set(["r","s","t"]);
+const RT1 = new Set(["u","v","w"]);
 
 function symbolClass(sym) {
   if (sym === "x") return "hl-x";
   if (sym === "y") return "hl-y";
   if (sym === "z") return "hl-z";
-  if (["r", "s", "t"].includes(sym)) return "hl0";
-  if (["u", "v", "w"].includes(sym)) return "hl1";
+  if (RT0.has(sym)) return "hl0";
+  if (RT1.has(sym)) return "hl1";
   if (sym === SENTINEL) return "hls";
-  if (sym === "0" || sym === "1") return "hldigit";
-  return "";
+  if (sym === "0" || sym === "1") return "";
+  return "muted";
 }
 
-let tape = [];
+// Update Needed: there shouldn't be E and F cells with their own index; there should be one tape where E and F cells are next to each other and the indexes happen to be even and odd
+// moving Right from and F cell with 1 in it should put you in an E cell with potentially a blank or a tag in it
+let tape = [] // use this combined tape instead of F and E
+// let F = [];
+// let E = [];
 let head = 0;
 let state = "begin";
+let sub_state = 0; // For multi-step operations within a single m-config
 let running = false;
 let timer = null;
-let opQueue = [];
+let stepCount = 0;
 
 function initialize() {
-  tape = [BLANK];
+  tape[BLANK]
+  // F = [BLANK];
+  // E = [BLANK];
   head = 0;
   state = "begin";
-  opQueue = [];
+  sub_state = 0;
+  stepCount = 0;
   logClear();
   render();
   setMsg("");
 }
 
+/*** Rendering ***/
+
+// const E_TAPE_STATES = new Set([
+//     'find-x',
+//     'first-r',
+//     'last-r',
+//     'find-1st-digit',
+//     'find-2nd-digit',
+//     'add-zero',
+//     'add-one',
+//     'carry',
+//     'erase-old-x',
+//     'print-new-x',
+//     'erase-old-y',
+//     'print-new-y',
+//     'reset-new-x',
+//     'flag-result-digits',
+//     'unflag-result-digits',
+//     'cleanup'
+// ]);
+
 function render() {
-  let digits = "";
-  for(let i = 0; i < tape.length; i += 2) {
-    if (tape[i] === '0' || tape[i] === '1') {
-      digits += tape[i];
-    }
-  }
-
-  document.getElementById("state").textContent = state;
+  // const digits = F.filter(s => s === "0" || s === "1").join("") || "—";
+  const digits = tape.filter(s => s === "0" || s === "1").join("") || "—";
+  document.getElementById("state").textContent = state + (sub_state > 0 ? ` (step ${sub_state})` : "");
   document.getElementById("head").textContent = String(head);
-  document.getElementById("digits").textContent = digits || "—";
+  document.getElementById("digits").textContent = digits;
 
-  const row = document.getElementById("tapeCells");
-  row.innerHTML = "";
+  const interleavedRow = document.getElementById("interleaved");
+  interleavedRow.innerHTML = "";
 
-  const maxLen = Math.max(tape.length, head + 10);
+  // const maxLen = Math.max(F.length, E.length, 30);
+  const maxLen = Math.max(tape.length, 30);
+  // while (F.length < maxLen) F.push(BLANK);
+  // while (E.length < maxLen) E.push(BLANK);
+  while (tape.length < maxLen) tape.push(BLANK);
+
+  // const activeTape = E_TAPE_STATES.has(state) ? 'E' : 'F';
 
   for (let i = 0; i < maxLen; i++) {
-    const sym = tape[i] ?? BLANK;
-    const cell = document.createElement("div");
-    const isFSquare = i % 2 === 0;
-    cell.className = "cell" + (i === head ? " head" : "") + (isFSquare ? " f-sq" : " e-sq");
-    cell.innerHTML = `
-      <span class="idx">${i}</span>
-      <div class="${symbolClass(sym)}">${sym === BLANK ? "·" : sym}</div>
-      <span class="type">${isFSquare ? "F" : "E"}</span>`;
-    row.appendChild(cell);
+    if (i % 2 === 1) {
+      const cf = document.createElement("div");
+      cf.className = "cell f" + (i === head ? " head" : "");
+      const f = tape[i] ?? BLANK;
+      cf.innerHTML = `<span class="idx">F${i}</span><span class="${symbolClass(f)}">${f === BLANK ? "·" : f}</span>`;
+      interleavedRow.appendChild(cf);
+    } else {
+      const ce = document.createElement("div");
+      ce.className = "cell e" + (i === head ? " head" : "");
+      const e = tape[i] ?? BLANK;
+      ce.innerHTML = `<span class="idx">E${i}</span><span class="${symbolClass(e)}">${e === BLANK ? "·" : e}</span>`;
+      interleavedRow.appendChild(ce);
+    }
+
+    // const cf = document.createElement("div");
+    // // cf.className = "cell f" + (i === head && activeTape === 'F' ? " head" : "");
+    // cf.className = "cell f" + (i === head && i % 2 === 1 ? " head" : "");
+    // // const f = F[i] ?? BLANK;
+    // const f = tape[i] ?? BLANK;
+    // cf.innerHTML = `<span class="idx">F${i}</span><span class="${symbolClass(f)}">${f === BLANK ? "·" : f}</span>`;
+    // interleavedRow.appendChild(cf);
+
+    // const ce = document.createElement("div");
+    // // ce.className = "cell e" + (i === head && activeTape === 'E' ? " head" : "");
+    // ce.className = "cell e" + (i === head && i % 2 === 0 ? " head" : "");
+    // // const e = E[i] ?? BLANK;
+    // const e = tape[i] ?? BLANK;
+    // ce.innerHTML = `<span class="idx">E${i}</span><span class="${symbolClass(e)}">${e === BLANK ? "·" : e}</span>`;
+    // interleavedRow.appendChild(ce);
   }
 }
 
+/*** Logging & Controls ***/
 const logEl = document.getElementById("log");
 function log(msg) {
   const div = document.createElement("div");
   div.className = "entry";
-  div.textContent = msg;
+  div.textContent = `[${stepCount}] ${state}: ${msg}`;
   logEl.appendChild(div);
   logEl.scrollTop = logEl.scrollHeight;
 }
 function logClear() { logEl.innerHTML = ""; }
 function setMsg(s)  { document.getElementById("msg").textContent = s; }
+initialize();
 
+/*** Tape Operations ***/
+// function readF() { return F[head] ?? BLANK; }
+// function readE() { return E[head] ?? BLANK; }
 function read() { return tape[head] ?? BLANK; }
-function write(sym) { 
-  while(head >= tape.length) tape.push(BLANK);
-  tape[head] = sym; 
-}
-function erase() { write(BLANK); }
-function moveL() { head = Math.max(0, head - 1); }
+// function writeF(sym) { F[head] = sym; }
+// function writeE(sym) { E[head] = sym; }
+function write(sym) { tape[head] = sym; }
+function moveL() { head = Math.max(0, head-1); }
 function moveR() {
-  head++;
-  if (head >= tape.length) tape.push(BLANK);
+  head += 1;
+  // if (head >= F.length) { F.push(BLANK); E.push(BLANK); }
+  if (head >= tape.length) { tape.push(BLANK); }
 }
 
-function queueOps(ops, nextState) {
-    opQueue = ops.concat([{ state: nextState }]);
+function changeState(newState) {
+    if (state !== newState) {
+        log(`→ transitioning to state: ${newState}`);
+        state = newState;
+        sub_state = 0;
+    }
 }
 
+// update Needed: we should be rendering the state after each subprocess so we can see the head move one step at a time, rather than after each m-config. state change
+/*** Main Machine Step Function ***/
 function step() {
-  if (state === "halt") {
-    setMsg("HALT");
-    running = false;
-    clearInterval(timer);
-    return;
-  }
+  if (state === "halt") { setMsg("HALT"); return; }
+  stepCount++;
   setMsg("");
 
-  if (opQueue.length > 0) {
-    const op = opQueue.shift();
-    if (op.op === 'P') { write(op.sym); log(`  Op: P${op.sym}`); }
-    if (op.op === 'E') { erase(); log(`  Op: E`); }
-    if (op.op === 'R') { moveR(); log(`  Op: R → head ${head}`); }
-    if (op.op === 'L') { moveL(); log(`  Op: L → head ${head}`); }
-    if (op.state) {
-        log(`→ state: ${op.state}`);
-        state = op.state;
-    }
-    render();
-    return;
-  }
-
-  const symbol = read();
-  log(`State: ${state}, Head: ${head} (reads '${symbol}')`);
-
-  // F-States operate on F-squares (even indices), E-states on E-squares (odd)
-  // Transitions must land the head on the correct square type for the next state.
+  // Dispatch to the function for the current m-configuration
   switch (state) {
-    case 'begin': // F-State
-        // P@ on F0, then P1 on F1. The R must cross an E-square.
-        queueOps([ { op: 'P', sym: SENTINEL }, { op: 'R' }, { op: 'R' }, { op: 'P', sym: '1' } ], 'new');
-        break;
-
-    case 'new': // F-State
-        if (symbol === SENTINEL) queueOps([{ op: 'R' }, { op: 'R' }], 'mark-digits'); // F->F
-        else queueOps([{ op: 'L' }, { op: 'L' }], 'new'); // F->F
-        break;
-
-    case 'mark-digits': // F-State
-        if (symbol === '0' || symbol === '1') {
-            // R (to E-sq), Px, R (to next F-sq)
-            queueOps([{ op: 'R' }, { op: 'P', sym: 'x' }, { op: 'R' }], 'mark-digits');
-        } else { // none
-            // R(F->E), Pz, R(E->F), R(F->E), Pr
-            queueOps([{ op: 'R' }, { op: 'P', sym: 'z' }, { op: 'R' }, { op: 'R' }, { op: 'P', sym: 'r' }], 'first-r');
-        }
-        break;
-        
-    case 'first-r': // E-State
-        if (tape.filter(s => s==='r').length >= 7) {
-            queueOps([], 'last-r');
-        } else {
-             if (symbol === BLANK) queueOps([{op: 'P', sym:'r'}, {op:'R'}, {op:'R'}], 'first-r');
-             else queueOps([{op: 'R'}, {op:'R'}], 'first-r');
-        }
-        break;
-
-    case 'last-r': // E-State (ends up anywhere)
-        // Reset head to F-square 0 for find-digits
-        if (head > 0) queueOps([{op: 'L'}], 'last-r');
-        else queueOps([], 'find-digits');
-        break;
-
-    case 'find-digits': // F-State
-        if (symbol === SENTINEL) queueOps([{op: 'R'}, {op: 'R'}], 'find-1st-digit'); // F->F, but next state is E, so this is wrong. Should land on E.
-        else queueOps([{op: 'L'}, {op: 'L'}], 'find-digits'); // F->F
-        break;
-
-    case 'find-1st-digit': // E-State
-        if (symbol === 'x' || symbol === 'y') queueOps([{op: 'L'}], 'found-1st-digit'); // E->F
-        else if (symbol === 'z') queueOps([{op: 'L'}], 'found-2nd-digit'); // E->F
-        else queueOps([{op: 'R'}, {op:'R'}], 'find-1st-digit'); // E->E
-        break;
-
-    case 'found-1st-digit': // F-State
-        if (symbol === '0') queueOps([{op:'R'}], 'add-zero'); // F->E
-        else { // '1'
-             // R, R (F->F), then needs one more R to land on E-sq for find-2nd-digit
-             queueOps([{op: 'R'}, {op:'R'}, {op: 'R'}], 'find-2nd-digit');
-        }
-        break;
-        
-    case 'find-2nd-digit': // E-State
-        if (symbol === 'x' || symbol === 'y') queueOps([{op: 'L'}], 'found-2nd-digit'); // E->F
-        else queueOps([{op: 'R'}, {op:'R'}], 'find-2nd-digit'); // E->E
-        break;
-
-    case 'found-2nd-digit': // F-State
-        if (symbol === '0') queueOps([{op: 'R'}], 'add-zero'); // F->E
-        else queueOps([{op: 'R'}], 'add-one'); // F->E
-        break;
-        
-    case 'add-zero': // E-State
-        if (symbol === 'r') queueOps([{ op: 'P', sym: 's' }], 'add-finished');
-        else if (symbol === 'u') queueOps([{ op: 'P', sym: 'v' }], 'add-finished');
-        else queueOps([{op: 'R'}, {op:'R'}], 'add-zero');
-        break;
-
-    case 'add-one': // E-State
-        if (symbol === 'r') queueOps([{ op: 'P', sym: 'v' }], 'add-finished');
-        else if (symbol === 'u') queueOps([{ op: 'P', sym: 's' }], 'carry');
-        else queueOps([{ op: 'R' }, {op: 'R'}], 'add-one');
-        break;
-
-    case 'carry': // E-State
-        if (symbol === BLANK) queueOps([{ op: 'P', sym: 'u' }], 'new-digit-is-zero');
-        else if (symbol === 'r') queueOps([{ op: 'P', sym: 'v' }], 'add-finished');
-        else if (symbol === 'u') queueOps([{ op: 'P', sym: 's' }, {op:'R'},{op:'R'}], 'carry');
-        else queueOps([], 'add-finished');
-        break;
-
-    case 'add-finished': // (transitions to F-state erase-old-x)
-        if (symbol === SENTINEL) queueOps([{ op: 'R'}, {op:'R'}], 'erase-old-x'); // Needs to land on E-sq
-        else queueOps([{ op: 'L' }], 'add-finished');
-        break;
-
-    case 'erase-old-x': // E-State
-        if (symbol === 'x') queueOps([{ op: 'E' }, { op: 'L' }], 'print-new-x'); // E->F
-        else if (symbol === 'z') queueOps([{ op: 'P', sym: 'y' }, { op: 'L' }], 'print-new-x'); // E->F
-        else queueOps([{ op: 'R' }, {op:'R'}], 'erase-old-x'); // E->E
-        break;
-
-    case 'print-new-x': // F-State
-        if (symbol === SENTINEL) queueOps([], 'erase-old-y'); // stay F, next is E
-        else if (tape[head+1] === BLANK) queueOps([{op: 'R'}, { op: 'P', sym: 'x' }], 'find-digits');
-        else queueOps([{ op: 'R' }, { op: 'P', sym: 'z' }], 'find-digits');
-        break;
-    
-    // Other states simplified for brevity; the core loop fix is above.
-    // The following states retain their logic but may need similar F/E review if issues persist.
-    case 'erase-old-y':
-        if (symbol === 'y') {
-            erase(); log('  Op: E');
-            moveL();
-            if (read() === SENTINEL) queueOps([], 'new-digit-is-one');
-            else { moveL(); queueOps([], 'print-new-y'); }
-        } else {
-            queueOps([{ op: 'R' }, {op:'R'}], 'erase-old-y');
-        }
-        break;
-
-    case 'print-new-y':
-        if (tape[head+1] === BLANK) queueOps([{op:'R'}, { op: 'P', sym: 'y' }], 'reset-new-x');
-        else queueOps([{op:'R'}, { op: 'P', sym: 'z' }], 'reset-new-x');
-        break;
-
-    case 'reset-new-x':
-        if (head % 2 === 0) moveR(); // Ensure on E-square
-        if (tape[head+1] === BLANK) {
-             queueOps([{ op: 'P', sym: 'x' }], 'flag-result-digits');
-        } else {
-            queueOps([{op:'R'}, {op:'R'}], 'reset-new-x');
-        }
-        break;
-
-    case 'flag-result-digits': // E-state
-        if (symbol === 's') queueOps([{ op: 'P', sym: 't' }], 'unflag-result-digits');
-        else if (symbol === 'v') queueOps([{ op: 'P', sym: 'w' }], 'unflag-result-digits');
-        else if (head >= tape.length -1) queueOps([], 'unflag-result-digits');
-        else queueOps([{ op: 'R' }, {op:'R'}], 'flag-result-digits');
-        break;
-
-    case 'unflag-result-digits': // E-state
-        if (symbol === 's') { write('r'); log('  Op: Pr'); }
-        else if (symbol === 'v') { write('u'); log('  Op: Pu'); }
-        if (head >= tape.length -1) {
-             queueOps([], 'find-digits');
-        } else {
-             queueOps([{ op: 'R' }, {op:'R'}], 'unflag-result-digits');
-        }
-        break;
-
-    case 'new-digit-is-zero':
-    case 'new-digit-is-one':
-        if (symbol === SENTINEL) {
-            const nextState = state === 'new-digit-is-one' ? 'print-one-digit' : 'print-zero-digit';
-            queueOps([{op: 'R'}, {op:'R'}], nextState); // F->F
-        } else {
-            queueOps([{op: 'L'}, {op:'L'}], state); // F->F
-        }
-        break;
-
-    case 'print-zero-digit':
-    case 'print-one-digit': // F-State
-        if (symbol === BLANK) {
-            const digit = state === 'print-one-digit' ? '1' : '0';
-            queueOps([{ op: 'P', sym: digit }], 'cleanup');
-        } else {
-            queueOps([{ op: 'R' }, {op:'R'}], state);
-        }
-        break;
-
-    case 'cleanup':
-        if (symbol === BLANK) queueOps([], 'new');
-        else queueOps([{ op: 'E' }, { op: 'R' }], 'cleanup');
-        break;
-
+    case "begin": st_begin(); break;
+    case "new": st_new(); break;
+    case "mark-digits": st_mark_digits(); break;
+    case "find-x": st_find_x(); break;
+    case "first-r": st_first_r(); break;
+    case "last-r": st_last_r(); break;
+    case "find-digits": st_find_digits(); break;
+    case "find-1st-digit": st_find_1st_digit(); break;
+    case "found-1st-digit": st_found_1st_digit(); break;
+    case "find-2nd-digit": st_find_2nd_digit(); break;
+    case "found-2nd-digit": st_found_2nd_digit(); break;
+    case "add-zero": st_add_zero(); break;
+    case "add-one": st_add_one(); break;
+    case "carry": st_carry(); break;
+    case "add-finished": st_add_finished(); break;
+    case "erase-old-x": st_erase_old_x(); break;
+    case "print-new-x": st_print_new_x(); break;
+    case "erase-old-y": st_erase_old_y(); break;
+    case "print-new-y": st_print_new_y(); break;
+    case "reset-new-x": st_reset_new_x(); break;
+    case "flag-result-digits": st_flag_result_digits(); break;
+    case "unflag-result-digits": st_unflag_result_digits(); break;
+    case "new-digit-is-zero": st_new_digit_is_zero(); break;
+    case "print-zero-digit": st_print_zero_digit(); break;
+    case "new-digit-is-one": st_new_digit_is_one(); break;
+    case "print-one-digit": st_print_one_digit(); break;
+    case "cleanup": st_cleanup(); break;
     default:
-        setMsg("Unknown state: " + state);
-        state = "halt";
+      setMsg("Unknown state: "+state);
+      changeState("halt");
+      break;
   }
   
-  if (opQueue.length === 0) {
-      render();
-  } else {
-      step();
+  render();
+}
+
+/*** M-Configuration (State) Functions ***/
+
+// m-config | symbol | operations | final m-config
+// begin | none | P@, R, P1 | new
+function st_begin() {
+    switch(sub_state) {
+        case 0:
+            log("Initial setup: P@");
+            write(SENTINEL);
+            sub_state++;
+            break;
+        case 1:
+            log("Initial setup: R");
+            moveR();
+            sub_state++;
+            break;
+        case 2:
+            log("Initial setup: P1");
+            write("1");
+            sub_state++;
+            break;
+        case 3:
+            changeState("new");
+            break;
+    }
+}
+
+// m-config | symbol | operations | final m-config
+// new | @ | R | mark-digits
+// new | else | L | new
+function st_new() {
+  switch(read()) {
+    case SENTINEL:
+      log("read @, moving R");
+      moveR();
+      changeState("mark-digits");
+      break;
+    default:
+      log("read non-@, moving L");
+      moveL();
+      break;
   }
 }
 
-/*** Controls ***/
-document.getElementById("btnStep").addEventListener("click", () => {
+// m-config | symbol | operations | final m-config
+// mark-digits| 0 or 1 | R, Px, R | mark-digits
+// mark-digits| none | R, Pz, R, R, Pr | find-x
+function st_mark_digits() {
+    const sym = read();
+    if (sym === '0' || sym === '1') {
+        switch(sub_state) {
+            case 0:
+                log(`read F='${sym}', moving R`);
+                moveR();
+                sub_state++;
+                break;
+            case 1:
+                log(`writing 'x'`);
+                write('x');
+                sub_state++;
+                break;
+            case 2:
+                log(`moving R`);
+                moveR();
+                sub_state = 0;
+                break;
+        }
+    } else if (sym === BLANK) {
+        switch(sub_state) {
+            case 0:
+                log(`read BLANK, moving R`);
+                moveR();
+                sub_state++;
+                break;
+            case 1:
+                log(`writing 'z' to E`);
+                write('z');
+                sub_state++;
+                break;
+            case 2:
+                log(`moving R`);
+                moveR();
+                sub_state++;
+                break;
+            case 3:
+                log(`moving R`);
+                moveR();
+                sub_state++;
+                break;
+            case 4:
+                log(`writing 'r' to E`);
+                write('r');
+                sub_state++;
+                break;
+            case 5:
+                changeState('find-x');
+                break;
+        }
+    } else {
+        // If we read something else, like '@', it means we're done marking leftward
+        changeState('find-x');
+    }
+}
+
+
+// m-config | symbol | operations | final m-config
+// find-x | x | E | first-r
+// find-x | @ | N | find-digits
+// find-x | else | L, L | find-x
+function st_find_x() {
+  const symE = read();
+  const symF = read();
+
+  if (sub_state === 0) {
+    log(`read E='${symE}', F='${symF}'`);
+    if (symE === 'x') {
+        write(BLANK); // E operation
+        changeState('first-r');
+    } else if (symF === SENTINEL) {
+        changeState('find-digits'); // N operation
+    } else {
+        moveL(); // First L
+        sub_state++;
+    }
+  } else {
+      moveL(); // Second L
+      sub_state = 0; // Reset for next cycle
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// first-r | r | R, R | last-r
+// first-r | else | R, R | first-r
+function st_first_r() {
+    const sym = read();
+    if (sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log(`moving R again`);
+        moveR();
+        if (sym === 'r') {
+            changeState('last-r');
+        } else {
+            sub_state = 0; // Stay in first-r
+        }
+    }
+}
+
+// m-config | symbol | operations | final m-config
+// last-r | r | R, R | last-r
+// last-r | none | Pr, R, R, Pr | find-x
+function st_last_r() {
+    const sym = read();
+    if (sym === BLANK) {
+        switch(sub_state) {
+            case 0:
+                log(`read BLANK, writing 'r'`);
+                write('r');
+                sub_state++;
+                break;
+            case 1:
+                log('moving R');
+                moveR();
+                sub_state++;
+                break;
+            case 2:
+                 log('moving R');
+                moveR();
+                sub_state++;
+                break;
+            case 3:
+                log(`writing 'r'`);
+                write('r');
+                sub_state++;
+                break;
+            case 4:
+                changeState('find-x');
+                break;
+        }
+    } else {
+        if (sub_state === 0) {
+            log(`read E='${sym}', moving R`);
+            moveR();
+            sub_state++;
+        } else {
+            log('moving R again');
+            moveR();
+            sub_state = 0; // Reset for next cycle
+        }
+    }
+}
+
+// m-config | symbol | operations | final m-config
+// find-digits | @ | R, R | find-1st-digit
+// find-digits | else | L, L | find-digits
+function st_find_digits() {
+  const sym = read();
+  // update Needed: the sub_state is incremented but the symbol shouldn't be read the second time
+  if (sym === SENTINEL) {
+      // if(sub_state === 0) {
+      //     log(`read @, moving R`);
+      //     moveR();
+      //     sub_state++;
+      // } else {
+      //     log(`moving R again`);
+      //     moveR();
+      //     changeState('find-1st-digit');
+      // }
+      if(sub_state === 0) {
+          log(`read @, moving R`);
+          moveR();
+          sub_state++;
+          log(`moving R again`);
+          moveR();
+          changeState('find-1st-digit');
+      }
+  } else {
+      if(sub_state === 0) {
+          log(`read non-@, moving L`);
+          moveL();
+          sub_state++;
+          log(`moving L again`);
+          moveL();
+          // sub_state = 0;
+          changeState('find-digits');
+      }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// find-1st-digit | x/y/z | L | ...
+// find-1st-digit | none | R, R | find-1st-digit
+function st_find_1st_digit() {
+  const sym = read();
+  switch(sym) {
+    case 'x':
+    case 'y':
+      log(`read E='${sym}', moving L`);
+      moveL();
+      changeState('found-1st-digit');
+      break;
+    case 'z':
+      log(`read E='${sym}', moving L`);
+      moveL();
+      changeState('found-2nd-digit');
+      break;
+    default: // Covers BLANK ('none') and other symbols
+      if(sub_state === 0) {
+          log(`read E='${sym}', moving R`);
+          moveR();
+          sub_state++;
+      } else {
+          log(`moving R again`);
+          moveR();
+          sub_state = 0;
+      }
+      break;
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// found-1st-digit | 0 | R | add-zero
+// found-1st-digit | 1 | R, R, R | find-2nd-digit
+function st_found_1st_digit() {
+  const sym = read();
+  if (sym === '0') {
+    log(`read F='${sym}', moving R`);
+    moveR();
+    changeState('add-zero');
+  } else if (sym === '1') {
+      switch(sub_state) {
+          case 0:
+              log(`read F='${sym}', moving R`);
+              moveR();
+              sub_state++;
+              break;
+          case 1:
+              log(`moving R`);
+              moveR();
+              sub_state++;
+              break;
+          case 2:
+              log(`moving R`);
+              moveR();
+              sub_state++;
+              break;
+          case 3:
+              changeState('find-2nd-digit');
+              break;
+      }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// find-2nd-digit | x/y | L | found-2nd-digit
+// find-2nd-digit | none | R, R | find-2nd-digit
+function st_find_2nd_digit() {
+  const sym = read();
+  if (sym === 'x' || sym === 'y') {
+    log(`read E='${sym}', moving L`);
+    moveL();
+    changeState('found-2nd-digit');
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log(`moving R again`);
+        moveR();
+        sub_state=0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// found-2nd-digit | 0 | R | add-zero
+// found-2nd-digit | 1/none | R | add-one
+function st_found_2nd_digit() {
+  const sym = read();
+  log(`read F='${sym}', moving R`);
+  moveR();
+  if (sym === '0') {
+    changeState('add-zero');
+  } else { // Covers '1' and BLANK ('none'), both add 1
+    changeState('add-one');
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// add-zero | r/u | Ps/Pv | add-finished
+// add-zero | else | R, R | add-zero
+function st_add_zero() {
+  const sym = read();
+  if (sym === 'r') {
+    log(`read E='${sym}', writing 's'`);
+    write('s');
+    changeState('add-finished');
+  } else if (sym === 'u') {
+    log(`read E='${sym}', writing 'v'`);
+    write('v');
+    changeState('add-finished');
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log(`moving R again`);
+        moveR();
+        sub_state=0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// add-one | r | Pv | add-finished
+// add-one | u | Ps, R, R | carry
+// add-one | else | R, R | add-one
+function st_add_one() {
+  const sym = read();
+  if (sym === 'r') {
+    log(`read E='${sym}', writing 'v'`);
+    write('v');
+    changeState('add-finished');
+  } else if (sym === 'u') {
+    if(sub_state === 0) {
+        log(`read E='${sym}', writing 's'`);
+        write('s');
+        sub_state++;
+    } else if (sub_state === 1) {
+        log('moving R');
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        changeState('carry');
+    }
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        sub_state=0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// carry | r/none | Pu | ...
+// carry | u | Pr, R, R | carry
+function st_carry() {
+  const sym = read();
+  if (sym === 'r') {
+    log(`read E='${sym}', writing 'u'`);
+    write('u');
+    changeState('add-finished');
+  } else if (sym === BLANK) {
+    log(`read BLANK, writing 'u'`);
+    write('u');
+    changeState('new-digit-is-zero');
+  } else if (sym === 'u') {
+      if(sub_state === 0) {
+        log(`read E='${sym}', writing 'r'`);
+        write('r');
+        sub_state++;
+      } else if (sub_state === 1) {
+        log('moving R');
+        moveR();
+        sub_state++;
+      } else {
+        log('moving R again');
+        moveR();
+        sub_state = 0; // Stay in carry
+      }
+  } else {
+      // Book doesn't specify but implies keep moving
+      log(`read E='${sym}', moving R`);
+      moveR();
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// add-finished | @ | R, R | erase-old-x
+// add-finished | else | L, L | add-finished
+function st_add_finished() {
+  const sym = read();
+  if (sym === SENTINEL) {
+    if(sub_state === 0) {
+        log(`read @, moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        changeState('erase-old-x');
+    }
+  } else {
+    if(sub_state === 0) {
+        log(`read non-@, moving L`);
+        moveL();
+        sub_state++;
+    } else {
+        log('moving L again');
+        moveL();
+        sub_state=0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// erase-old-x | x | E, L, L | print-new-x
+// erase-old-x | z | Py, L, L | print-new-x
+// erase-old-x | else | R, R | erase-old-x
+function st_erase_old_x() {
+  const sym = read();
+  const opSequence = (writeSym) => {
+      switch(sub_state) {
+          case 0:
+              log(`read E='${sym}', writing '${writeSym}'`);
+              write(writeSym);
+              sub_state++;
+              break;
+          case 1:
+              log('moving L');
+              moveL();
+              sub_state++;
+              break;
+          case 2:
+              log('moving L again');
+              moveL();
+              changeState('print-new-x');
+              break;
+      }
+  };
+
+  if (sym === 'x') {
+      opSequence(BLANK);
+  } else if (sym === 'z') {
+      opSequence('y');
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        sub_state=0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// print-new-x | @ | R, R | erase-old-y
+// print-new-x | y | Pz | find-digits
+// print-new-x | none | Px | find-digits
+function st_print_new_x() {
+  const symF = read();
+  const symE = read();
+  log(`read F='${symF}', E='${symE}'`);
+  if (symF === SENTINEL) {
+    if(sub_state === 0) {
+        log(`read @, moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        changeState('erase-old-y');
+    }
+  } else if (symE === 'y') {
+    log(`writing 'z'`);
+    write('z');
+    changeState('find-digits');
+  } else if (symE === BLANK) {
+    log(`writing 'x'`);
+    write('x');
+    changeState('find-digits');
+  } else {
+      log('Error in print-new-x logic, moving R');
+      moveR();
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// erase-old-y | y | E, L, L | print-new-y
+// erase-old-y | else | R, R | erase-old-y
+function st_erase_old_y() {
+    const sym = read();
+    if(sym === 'y') {
+        switch(sub_state) {
+            case 0:
+                log(`read E='${sym}', erasing`);
+                write(BLANK);
+                sub_state++;
+                break;
+            case 1:
+                log('moving L');
+                moveL();
+                sub_state++;
+                break;
+            case 2:
+                log('moving L again');
+                moveL();
+                changeState('print-new-y');
+                break;
+        }
+    } else {
+        if(sub_state === 0) {
+            log(`read E='${sym}', moving R`);
+            moveR();
+            sub_state++;
+        } else {
+            log('moving R again');
+            moveR();
+            sub_state = 0;
+        }
+    }
+}
+
+
+// m-config | symbol | operations | final m-config
+// print-new-y | @ | R | new-digit-is-one
+// print-new-y | else | Py, R | reset-new-x
+function st_print_new_y() {
+  const sym = read();
+  if (sym === SENTINEL) {
+    log(`read @, moving R`);
+    moveR();
+    changeState('new-digit-is-one');
+  } else {
+    if(sub_state === 0) {
+        log(`read F='${sym}', writing 'y'`);
+        write('y');
+        sub_state++;
+    } else {
+        log('moving R');
+        moveR();
+        changeState('reset-new-x');
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// reset-new-x | none | R, Px | flag-result-digits
+// reset-new-x | else | R, R | reset-new-x
+function st_reset_new_x() {
+  const sym = read();
+  if (sym === BLANK) {
+      if(sub_state === 0) {
+        log(`read BLANK, moving R`);
+        moveR();
+        sub_state++;
+      } else {
+        log(`writing 'x'`);
+        write('x');
+        changeState('flag-result-digits');
+      }
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        sub_state = 0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// flag-result-digits | s | Pt, R, R | unflag-result-digits
+// flag-result-digits | v | Pw, R, R | unflag-result-digits
+// flag-result-digits | else | R, R | flag-result-digits
+function st_flag_result_digits() {
+  const sym = read();
+  const opSequence = (writeSym) => {
+      switch(sub_state) {
+          case 0:
+            log(`read E='${sym}', writing '${writeSym}'`);
+            write(writeSym);
+            sub_state++;
+            break;
+          case 1:
+            log('moving R');
+            moveR();
+            sub_state++;
+            break;
+          case 2:
+            log('moving R again');
+            moveR();
+            changeState('unflag-result-digits');
+            break;
+      }
+  };
+
+  if (sym === 's') {
+    opSequence('t');
+  } else if (sym === 'v') {
+    opSequence('w');
+  } else {
+    if(sub_state === 0) {
+        log(`read E='${sym}', moving R`);
+        moveR();
+        sub_state++;
+    } else {
+        log('moving R again');
+        moveR();
+        sub_state = 0;
+    }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// unflag-result-digits | s | Pr, R, R | unflag-result-digits
+// unflag-result-digits | v | Pu, R, R | unflag-result-digits
+// unflag-result-digits | else | N | find-digits
+function st_unflag_result_digits() {
+    const sym = read();
+    const opSequence = (writeSym) => {
+        switch(sub_state) {
+            case 0:
+                log(`read E='${sym}', writing '${writeSym}'`);
+                write(writeSym);
+                sub_state++;
+                break;
+            case 1:
+                log('moving R');
+                moveR();
+                sub_state++;
+                break;
+            case 2:
+                log('moving R again');
+                moveR();
+                sub_state = 0; // stay in state
+                break;
+        }
+    };
+    if (sym === 's') {
+        opSequence('r');
+    } else if (sym === 'v') {
+        opSequence('u');
+    } else {
+        changeState('find-digits');
+    }
+}
+
+// m-config | symbol | operations | final m-config
+// new-digit-is-zero | @ | R | print-zero-digit
+// new-digit-is-zero | else | L | new-digit-is-zero
+function st_new_digit_is_zero() {
+  const sym = read();
+  if (sym === SENTINEL) {
+    log(`read @, moving R`);
+    moveR();
+    changeState('print-zero-digit');
+  } else {
+    log(`read non-@, moving L`);
+    moveL();
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// print-zero-digit | 0/1 | R, E, R | print-zero-digit
+// print-zero-digit | none | P0, R, R | cleanup
+function st_print_zero_digit() {
+  const sym = read();
+  if (sym === '0' || sym === '1') {
+      switch(sub_state) {
+          case 0:
+            log(`read F='${sym}', moving R`);
+            moveR();
+            sub_state++;
+            break;
+          case 1:
+            log('erasing marker on E');
+            write(BLANK);
+            sub_state++;
+            break;
+          case 2:
+            log('moving R again');
+            moveR();
+            sub_state = 0;
+            break;
+      }
+  } else if (sym === BLANK) {
+      switch(sub_state) {
+          case 0:
+            log(`read BLANK, writing '0'`);
+            write('0');
+            sub_state++;
+            break;
+          case 1:
+            log('moving R');
+            moveR();
+            sub_state++;
+            break;
+          case 2:
+            log('moving R again');
+            moveR();
+            changeState('cleanup');
+            break;
+      }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// new-digit-is-one | @ | R | print-one-digit
+// new-digit-is-one | else | L | new-digit-is-one
+function st_new_digit_is_one() {
+  const sym = read();
+  if (sym === SENTINEL) {
+    log(`read @, moving R`);
+    moveR();
+    changeState('print-one-digit');
+  } else {
+    log(`read non-@, moving L`);
+    moveL();
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// print-one-digit | 0/1 | R, E, R | print-one-digit
+// print-one-digit | none | P1, R, R | cleanup
+function st_print_one_digit() {
+  const sym = read();
+  if (sym === '0' || sym === '1') {
+      switch(sub_state) {
+          case 0:
+            log(`read F='${sym}', moving R`);
+            moveR();
+            sub_state++;
+            break;
+          case 1:
+            log('erasing marker on E');
+            write(BLANK);
+            sub_state++;
+            break;
+          case 2:
+            log('moving R again');
+            moveR();
+            sub_state = 0;
+            break;
+      }
+  } else if (sym === BLANK) {
+      switch(sub_state) {
+          case 0:
+            log(`read BLANK, writing '1'`);
+            write('1');
+            sub_state++;
+            break;
+          case 1:
+            log('moving R');
+            moveR();
+            sub_state++;
+            break;
+          case 2:
+            log('moving R again');
+            moveR();
+            changeState('cleanup');
+            break;
+      }
+  }
+}
+
+// m-config | symbol | operations | final m-config
+// cleanup | none | N | new
+// cleanup | else | E, R, R | cleanup
+function st_cleanup() {
+    const sym = read();
+    if (sym === BLANK) {
+        let markerFound = false;
+        for(let i = head; i < E.length; i++) {
+            // Check for any non-blank, non-running-total symbol
+            if(E[i] !== BLANK && !RT0.has(E[i]) && !RT1.has(E[i])) { 
+                markerFound = true;
+                break;
+            }
+        }
+        if (markerFound) {
+            log('found other markers, moving R to continue cleanup');
+            moveR();
+        } else {
+           log('no more markers, cleanup complete');
+           changeState('new');
+        }
+    } else {
+        // Erase only markers (x,y,z), not running total symbols
+        if (!RT0.has(sym) && !RT1.has(sym)) {
+            log(`read E='${sym}', erasing marker`);
+            write(BLANK);
+        }
+        log(`moving R`);
+        moveR();
+    }
+}
+
+
+/*** UI Controls ***/
+document.getElementById("btnStep").addEventListener("click", ()=> {
   if (!running) { step(); }
 });
-document.getElementById("btnRun").addEventListener("click", () => {
+document.getElementById("btnRun").addEventListener("click", ()=> {
   if (running) return;
   running = true;
   const speedSel = document.getElementById("speed");
   const delay = parseInt(speedSel.value, 10);
-  const runStep = () => {
-      if (running && state !== 'halt') {
-          step();
-          timer = setTimeout(runStep, delay);
-      } else {
-          running = false;
-      }
-  };
-  runStep();
+  timer = setInterval(()=> {
+    if (running) step();
+    else clearInterval(timer);
+  }, delay);
 });
-document.getElementById("btnPause").addEventListener("click", () => {
+document.getElementById("btnPause").addEventListener("click", ()=> {
   running = false;
-  clearTimeout(timer);
+  clearInterval(timer);
 });
-document.getElementById("btnReset").addEventListener("click", () => {
+document.getElementById("btnReset").addEventListener("click", ()=> {
   running = false;
-  clearTimeout(timer);
+  clearInterval(timer);
   initialize();
 });
-
-/*** Boot ***/
-initialize();
 </script>
 </body>
 </html>
+
