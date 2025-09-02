@@ -197,7 +197,7 @@
     <div class="statusbar">
       <div>State: <b id="state">begin</b></div>
       <div>Head @ index: <b id="head">0</b></div>
-      <div>Digits so far: <b id="digits">â€"</b></div>
+      <div>Digits so far: <b id="digits">–</b></div>
     </div>
 
     <div class="board">
@@ -209,15 +209,15 @@
         <span class="chip"><span class="dot x"></span>x marker</span>
         <span class="chip"><span class="dot y"></span>y marker</span>
         <span class="chip"><span class="dot z"></span>z marker (= x & y coincide)</span>
-        <span class="chip"><span class="dot r0"></span>r/s/t â†' 0</span>
-        <span class="chip"><span class="dot r1"></span>u/v/w â†' 1</span>
+        <span class="chip"><span class="dot r0"></span>r/s/t → 0</span>
+        <span class="chip"><span class="dot r1"></span>u/v/w → 1</span>
         <span>Head = blue outline | F-squares = darker | E-squares = lighter</span>
       </div>
       <div id="log" class="log"></div>
     </div>
 
     <footer>
-      Built to mirror the states and markers described in the book's âˆš2 machine (Petzold). It logs every micro-step: reads, writes, moves, and state transitions.
+      Built to mirror the states and markers described in the book's √2 machine (Petzold). It logs every micro-step: reads, writes, moves, and state transitions.
     </footer>
   </div>
 
@@ -318,11 +318,13 @@ function moveR() {
 }
 
 function changeState(newState) {
-    log(`→ transitioning to state: ${newState}`);
-    state = newState;
-    sub_state = 0;
-    inSubprocess = false;
-    lastReadSymbol = null;
+    if (state !== newState) {
+        log(`→ transitioning to state: ${newState}`);
+        state = newState;
+        sub_state = 0;
+        inSubprocess = false;
+        lastReadSymbol = null;
+    }
 }
 
 /*** Main Machine Step Function ***/
@@ -415,7 +417,7 @@ function st_new() {
     default:
       log("moving L");
       moveL();
-      changeState("new");
+      inSubprocess = false;
       break;
   }
 }
@@ -446,7 +448,7 @@ function st_mark_digits() {
             case 2:
                 log(`moving R`);
                 moveR();
-                changeState('mark-digits');
+                inSubprocess = false;
                 break;
         }
     } else if (lastReadSymbol === BLANK) {
@@ -490,6 +492,40 @@ function st_mark_digits() {
 // find-x | x | E | first-r
 // find-x | @ | N | find-digits
 // find-x | else | L, L | find-x
+// function st_find_x() {
+//   if (!inSubprocess) {
+//     lastReadSymbol = read();
+//     log(`read '${lastReadSymbol}'`);
+//     inSubprocess = true;
+//     sub_state = 0;
+//   }
+
+//   if (lastReadSymbol === 'x') {
+//     log(`erasing 'x'`);
+//     write(BLANK); // E operation
+//     changeState('first-r');
+//   } else if (lastReadSymbol === SENTINEL) {
+//     changeState('find-digits'); // N operation
+//   } else {
+//     switch(sub_state) {
+//       case 0:
+//         log(`moving L`);
+//         moveL(); // First L
+//         sub_state++;
+//         break;
+//       case 1:
+//         log(`moving L again`);
+//         moveL(); // Second L
+//         sub_state = 0;
+//         inSubprocess = false; // Reset for next cycle, stay in find-x
+//         break;
+//     }
+//   }
+// }
+// m-config | symbol | operations | final m-config
+// find-x | x | E | first-r
+// find-x | @ | N | find-digits
+// find-x | else | L, L | find-x
 function st_find_x() {
   if (!inSubprocess) {
     lastReadSymbol = read();
@@ -514,11 +550,12 @@ function st_find_x() {
       case 1:
         log(`moving L again`);
         moveL(); // Second L
-        changeState('find-x'); // Reset for next cycle, stay in find-x
+        inSubprocess = false; // Reset for next cycle, stay in find-x
         break;
     }
   }
 }
+
 
 // m-config | symbol | operations | final m-config
 // first-r | r | R, R | last-r
@@ -543,7 +580,7 @@ function st_first_r() {
             if (lastReadSymbol === 'r') {
                 changeState('last-r');
             } else {
-                changeState('first-r'); // Stay in first-r
+                inSubprocess = false; // Stay in first-r
             }
             break;
     }
@@ -596,7 +633,7 @@ function st_last_r() {
             case 1:
                 log('moving R again');
                 moveR();
-                changeState('last-r'); // Reset for next cycle
+                inSubprocess = false; // Reset for next cycle
                 break;
         }
     }
@@ -636,7 +673,7 @@ function st_find_digits() {
           case 1:
               log(`moving L again`);
               moveL();
-              changeState('find-digits');
+              inSubprocess = false;
               break;
       }
   }
@@ -675,7 +712,7 @@ function st_find_1st_digit() {
           case 1:
               log(`moving R again`);
               moveR();
-              changeState('find-1st-digit');
+              inSubprocess = false;
               break;
       }
       break;
@@ -746,7 +783,7 @@ function st_find_2nd_digit() {
         case 1:
             log(`moving R again`);
             moveR();
-            changeState('find-2nd-digit');
+            inSubprocess = false;
             break;
     }
   }
@@ -800,7 +837,7 @@ function st_add_zero() {
         case 1:
             log(`moving R again`);
             moveR();
-            changeState('add-zero');
+            inSubprocess = false;
             break;
     }
   }
@@ -850,7 +887,7 @@ function st_add_one() {
         case 1:
             log('moving R again');
             moveR();
-            changeState('add-one');
+            inSubprocess = false;
             break;
     }
   }
@@ -890,14 +927,14 @@ function st_carry() {
           case 2:
             log('moving R again');
             moveR();
-            changeState('carry'); // Reset for next cycle
+            inSubprocess = false; // Stay in carry
             break;
       }
   } else {
       // Book doesn't specify but implies keep moving
       log(`moving R`);
       moveR();
-      changeState('carry');
+      inSubprocess = false;
   }
 }
 
@@ -935,7 +972,7 @@ function st_add_finished() {
         case 1:
             log('moving L again');
             moveL();
-            changeState('add-finished');
+            inSubprocess = false;
             break;
     }
   }
@@ -987,7 +1024,7 @@ function st_erase_old_x() {
         case 1:
             log('moving R again');
             moveR();
-            changeState('erase-old-x');
+            inSubprocess = false;
             break;
     }
   }
@@ -1068,7 +1105,7 @@ function st_erase_old_y() {
             case 1:
                 log('moving R again');
                 moveR();
-                changeState('erase-old-y');
+                inSubprocess = false;
                 break;
         }
     }
@@ -1139,7 +1176,7 @@ function st_reset_new_x() {
         case 1:
             log('moving R again');
             moveR();
-            changeState('reset-new-x');
+            inSubprocess = false;
             break;
     }
   }
@@ -1191,7 +1228,7 @@ function st_flag_result_digits() {
         case 1:
             log('moving R again');
             moveR();
-            changeState('flag-result-digits');
+            inSubprocess = false;
             break;
     }
   }
@@ -1224,7 +1261,7 @@ function st_unflag_result_digits() {
             case 2:
                 log('moving R again');
                 moveR();
-                changeState('unflag-result-digits'); // stay in state
+                inSubprocess = false; // stay in state
                 break;
         }
     };
@@ -1255,7 +1292,7 @@ function st_new_digit_is_zero() {
   } else {
     log(`moving L`);
     moveL();
-    changeState('new-digit-is-zero');
+    inSubprocess = false;
   }
 }
 
@@ -1285,7 +1322,7 @@ function st_print_zero_digit() {
           case 2:
             log('moving R again');
             moveR();
-            changeState('print-zero-digit');
+            inSubprocess = false;
             break;
       }
   } else if (lastReadSymbol === BLANK) {
@@ -1326,7 +1363,7 @@ function st_new_digit_is_one() {
   } else {
     log(`moving L`);
     moveL();
-    changeState('new-digit-is-one');
+    inSubprocess = false;
   }
 }
 
@@ -1356,7 +1393,7 @@ function st_print_one_digit() {
           case 2:
             log('moving R again');
             moveR();
-            changeState('print-one-digit');
+            inSubprocess = false;
             break;
       }
   } else if (lastReadSymbol === BLANK) {
@@ -1403,7 +1440,7 @@ function st_cleanup() {
         if (markerFound) {
             log('found other markers, moving R to continue cleanup');
             moveR();
-            changeState('cleanup');
+            inSubprocess = false;
         } else {
            log('no more markers, cleanup complete');
            changeState('new');
@@ -1426,7 +1463,7 @@ function st_cleanup() {
             case 2:
                 log('moving R again');
                 moveR();
-                changeState('cleanup');
+                inSubprocess = false;
                 break;
         }
     }
