@@ -1,4 +1,4 @@
-<!-- Update Note: make state change in last operation switch statement or in subsequent switch statement, but be consistent -->
+<!-- Update Note: make all m-config state rules consistent in formatting -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -978,12 +978,6 @@ function st_carry() {
             break;
       }
   } 
-  // else {
-  //     // Book doesn't specify but implies keep moving
-  //     log(`moving R`);
-  //     moveR();
-  //     changeState('carry');
-  // }
 }
 
 // m-config | symbol | operations | final m-config
@@ -1533,31 +1527,10 @@ function st_cleanup() {
     }
     
     if (lastReadSymbol === BLANK) {
-        // let markerFound = false;
-        // for(let i = head; i < tape.length; i++) {
-        //     // Check for any non-blank, non-running-total symbol
-        //     if(tape[i] !== BLANK && !RT0.has(tape[i]) && !RT1.has(tape[i])) { 
-        //         markerFound = true;
-        //         break;
-        //     }
-        // }
-        // if (markerFound) {
-        //     log('found other markers, moving R to continue cleanup');
-        //     moveR();
-        //     changeState('cleanup');
-        // } else {
-        //    log('no more markers, cleanup complete');
-        //    changeState('new');
-        // }
         changeState('new');
     } else {
         switch(sub_state) {
             case 0:
-                // Erase only markers (x,y,z), not running total symbols
-                // if (!RT0.has(lastReadSymbol) && !RT1.has(lastReadSymbol)) {
-                //     log(`erasing marker`);
-                //     write(BLANK);
-                // }
                 log(`erasing marker`);
                 write(BLANK);
                 sub_state++;
