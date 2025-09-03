@@ -1,3 +1,4 @@
+<!-- Update Note: make state change in last operation switch statement or in subsequent, but be consistent -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -173,8 +174,8 @@
 </head>
 <body>
   <header>
-    <h1>√2 Turing Machine – faithful step-by-step simulator</h1>
-    <p>Interleaved F-squares (digits) and E-squares (workspace) like in the book. Step through the exact m-configurations.</p>
+    <h1>√2 Turing Machine – step-by-step simulator</h1>
+    <p>A Turing Machine that computes the square root of 2 like the example in Ch. 6 of "Annotated Turing" by Charles Petzold.</p>
   </header>
 
   <div class="wrap">
@@ -202,23 +203,21 @@
 
     <div class="board">
       <div class="tape">
-        <div class="tape-label">Interleaved F-squares and E-squares</div>
+        <div class="tape-label">A Turing Machine Tape with Interleaved F-squares (digits) and E-squares (workspace)</div>
         <div class="row"><div id="interleaved" class="cells"></div></div>
       </div>
       <div class="legend">
         <span class="chip"><span class="dot x"></span>x marker</span>
         <span class="chip"><span class="dot y"></span>y marker</span>
         <span class="chip"><span class="dot z"></span>z marker (= x & y coincide)</span>
-        <span class="chip"><span class="dot r0"></span>r/s/t â†' 0</span>
-        <span class="chip"><span class="dot r1"></span>u/v/w â†' 1</span>
+        <span class="chip"><span class="dot r0"></span>r/s/t → 0</span>
+        <span class="chip"><span class="dot r1"></span>u/v/w → 1</span>
         <span>Head = blue outline | F-squares = darker | E-squares = lighter</span>
       </div>
       <div id="log" class="log"></div>
     </div>
 
-    <footer>
-      Built to mirror the states and markers described in the book's âˆš2 machine (Petzold). It logs every micro-step: reads, writes, moves, and state transitions.
-    </footer>
+    <footer id="sqrt-display"></footer>
   </div>
 
 <script>
@@ -257,6 +256,23 @@ let running = false;
 let timer = null;
 let stepCount = 0;
 
+function toBinaryFraction(x, bits) {
+  const intPart = Math.floor(x);
+  let frac = x - intPart;
+  let out = intPart.toString(2) + ".";
+
+  for (let i = 0; i < bits; i++) {
+    frac *= 2;
+    if (frac >= 1) {
+      out += "1";
+      frac -= 1;
+    } else {
+      out += "0";
+    }
+  }
+  return out;
+}
+
 function initialize() {
   tape = [BLANK];
   head = 0;
@@ -268,6 +284,8 @@ function initialize() {
   logClear();
   render();
   setMsg("");
+  const sqrtDiv = document.getElementById('sqrt-display');
+  sqrtDiv.textContent = Math.SQRT2 + " in binary: " + toBinaryFraction(Math.SQRT2, 20) + "...";
 }
 
 /*** Rendering ***/
@@ -318,7 +336,7 @@ function moveR() {
 }
 
 function changeState(newState) {
-    log(`→ transitioning to state: ${newState}`);
+    log(`→ transitioning to m-config. state: ${newState}`);
     state = newState;
     sub_state = 0;
     inSubprocess = false;
@@ -327,7 +345,7 @@ function changeState(newState) {
 
 /*** Main Machine Step Function ***/
 function step() {
-  if (state === "halt") { setMsg("HALT"); return; }
+  // if (state === "halt") { setMsg("HALT"); return; }
   stepCount++;
   setMsg("");
 
@@ -360,10 +378,10 @@ function step() {
     case "new-digit-is-one": st_new_digit_is_one(); break;
     case "print-one-digit": st_print_one_digit(); break;
     case "cleanup": st_cleanup(); break;
-    default:
-      setMsg("Unknown state: "+state);
-      changeState("halt");
-      break;
+    // default:
+    //   setMsg("Unknown state: "+state);
+    //   changeState("halt");
+    //   break;
   }
   
   render();
@@ -374,50 +392,93 @@ function step() {
 // m-config | symbol | operations | final m-config
 // begin | none | P@, R, P1 | new
 function st_begin() {
-    switch(sub_state) {
+    if (!inSubprocess) {
+      lastReadSymbol = read();
+      log(`read '${lastReadSymbol}'`);
+      inSubprocess = true;
+    }
+
+    if (lastReadSymbol === BLANK) {
+      switch(sub_state) {
         case 0:
-            log("Initial setup: P@");
+            log("P@; Print @, the sentinel");
             write(SENTINEL);
             sub_state++;
             break;
         case 1:
-            log("Initial setup: R");
+            log("R; move right");
             moveR();
             sub_state++;
             break;
         case 2:
-            log("Initial setup: P1");
+            log("P1; print 1");
             write("1");
             sub_state++;
             break;
         case 3:
             changeState("new");
             break;
+      }
     }
 }
 
 // m-config | symbol | operations | final m-config
 // new | @ | R | mark-digits
 // new | else | L | new
-function st_new() {
-  if (!inSubprocess) {
-    lastReadSymbol = read();
-    log(`read '${lastReadSymbol}'`);
-    inSubprocess = true;
-  }
+// function st_new() {
+//   if (!inSubprocess) {
+//     lastReadSymbol = read();
+//     log(`read '${lastReadSymbol}'`);
+//     inSubprocess = true;
+//   }
   
-  switch(lastReadSymbol) {
-    case SENTINEL:
-      log("moving R");
-      moveR();
-      changeState("mark-digits");
-      break;
-    default:
-      log("moving L");
-      moveL();
-      changeState("new");
-      break;
-  }
+//   // update Note: these should have two steps. We want to be consistent with switch statements that separate out into an additional step the state change.
+//   switch(lastReadSymbol) {
+//     case SENTINEL:
+//       log("moving R");
+//       moveR();
+//       changeState("mark-digits");
+//       break;
+//     default:
+//       log("moving L");
+//       moveL();
+//       changeState("new");
+//       break;
+//   }
+// }
+function st_new() {
+    if (!inSubprocess) {
+        lastReadSymbol = read();
+        log(`read '${lastReadSymbol}'`);
+        inSubprocess = true;
+        sub_state = 0;
+    }
+
+    if (lastReadSymbol === SENTINEL) {
+        // Rule: move R → mark-digits
+        switch(sub_state) {
+            case 0:
+                log("moving R");
+                moveR();
+                sub_state++;
+                break;
+            case 1:
+                changeState("mark-digits");
+                break;
+        }
+    } else {
+        // Rule: move L → new
+        switch(sub_state) {
+            case 0:
+                log("moving L");
+                moveL();
+                sub_state++;
+                break;
+            case 1:
+                changeState("new");
+                break;
+        }
+    }
 }
 
 // m-config | symbol | operations | final m-config
@@ -457,7 +518,7 @@ function st_mark_digits() {
                 sub_state++;
                 break;
             case 1:
-                log(`writing 'z' to E`);
+                log(`writing 'z'`);
                 write('z');
                 sub_state++;
                 break;
@@ -472,7 +533,7 @@ function st_mark_digits() {
                 sub_state++;
                 break;
             case 4:
-                log(`writing 'r' to E`);
+                log(`writing 'r'`);
                 write('r');
                 sub_state++;
                 break;
@@ -480,10 +541,11 @@ function st_mark_digits() {
                 changeState('find-x');
                 break;
         }
-    } else {
-        // If we read something else, like '@', it means we're done marking leftward
-        changeState('find-x');
-    }
+    } 
+    // else {
+    //     // If we read something else, like '@', it means we're done marking leftward
+    //     changeState('find-x');
+    // }
 }
 
 // m-config | symbol | operations | final m-config
@@ -1332,7 +1394,7 @@ function st_new_digit_is_one() {
 
 // m-config | symbol | operations | final m-config
 // print-one-digit | 0/1 | R, E, R | print-one-digit
-// print-one-digit | none | P1, R, R | cleanup
+// print-one-digit | none | P1, R, R, R | cleanup
 function st_print_one_digit() {
   if (!inSubprocess) {
     lastReadSymbol = read();
@@ -1373,6 +1435,11 @@ function st_print_one_digit() {
             break;
           case 2:
             log('moving R again');
+            moveR();
+            sub_state++;
+            break;
+          case 3:
+            log('moving R third time');
             moveR();
             changeState('cleanup');
             break;
@@ -1431,7 +1498,6 @@ function st_cleanup() {
         }
     }
 }
-
 
 /*** UI Controls ***/
 document.getElementById("btnStep").addEventListener("click", ()=> {

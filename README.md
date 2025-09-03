@@ -1,1 +1,9 @@
-This is an AI-generated first pass of implementing a Turing machine that computes the square root of 2. I wanted it to implement an example from the book "Annotated Turing" but it is still buggy. I'm going to fix it later.
+This is the visualization and implementing of a Turing Machine that computes the square root of 2. 
+
+See chapter 6 in the book "Annotated Turing" by Charles Petzold.
+
+it's still buggy. the first five digits are '10111' but it should be '10110' so something is wrong.
+
+The site is hosted here:
+
+
