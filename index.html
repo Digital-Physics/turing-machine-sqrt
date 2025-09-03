@@ -197,7 +197,7 @@
 
     <div class="statusbar">
       <div>State: <b id="state">begin</b></div>
-      <div>Head @ index: <b id="head">0</b></div>
+      <div>Last Symbol Read: <b id="lastread">0</b></div>
       <div>Digits so far: <b id="digits">â€"</b></div>
     </div>
 
@@ -298,7 +298,7 @@ function initialize() {
 function render() {
   const digits = tape.filter((s, i) => i % 2 === 1 && (s === "0" || s === "1")).join("") || "–";
   document.getElementById("state").textContent = state + (sub_state > 0 ? ` (step ${sub_state})` : "");
-  document.getElementById("head").textContent = String(head);
+  document.getElementById("lastread").textContent = String(lastReadSymbol === BLANK? "(blank)": lastReadSymbol || "(reset)");
   document.getElementById("digits").textContent = digits;
 
   const interleavedRow = document.getElementById("interleaved");
