@@ -1,4 +1,4 @@
-<!-- Update Note: make state change in last operation switch statement or in subsequent, but be consistent -->
+<!-- Update Note: make state change in last operation switch statement or in subsequent switch statement, but be consistent -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -212,7 +212,7 @@
         <span class="chip"><span class="dot z"></span>z marker (= x & y coincide)</span>
         <span class="chip"><span class="dot r0"></span>r/s/t → 0</span>
         <span class="chip"><span class="dot r1"></span>u/v/w → 1</span>
-        <span>Head = blue outline | F-squares = darker | E-squares = lighter</span>
+        <!-- <span>Head = blue outline | F-squares = darker | E-squares = lighter</span> -->
       </div>
       <div id="log" class="log"></div>
     </div>
@@ -425,27 +425,6 @@ function st_begin() {
 // m-config | symbol | operations | final m-config
 // new | @ | R | mark-digits
 // new | else | L | new
-// function st_new() {
-//   if (!inSubprocess) {
-//     lastReadSymbol = read();
-//     log(`read '${lastReadSymbol}'`);
-//     inSubprocess = true;
-//   }
-  
-//   // update Note: these should have two steps. We want to be consistent with switch statements that separate out into an additional step the state change.
-//   switch(lastReadSymbol) {
-//     case SENTINEL:
-//       log("moving R");
-//       moveR();
-//       changeState("mark-digits");
-//       break;
-//     default:
-//       log("moving L");
-//       moveL();
-//       changeState("new");
-//       break;
-//   }
-// }
 function st_new() {
     if (!inSubprocess) {
         lastReadSymbol = read();
@@ -506,7 +485,9 @@ function st_mark_digits() {
                 break;
             case 2:
                 log(`moving R`);
+                sub_state++;
                 moveR();
+            case 3:
                 changeState('mark-digits');
                 break;
         }
@@ -541,11 +522,7 @@ function st_mark_digits() {
                 changeState('find-x');
                 break;
         }
-    } 
-    // else {
-    //     // If we read something else, like '@', it means we're done marking leftward
-    //     changeState('find-x');
-    // }
+    }
 }
 
 // m-config | symbol | operations | final m-config
@@ -561,9 +538,16 @@ function st_find_x() {
   }
 
   if (lastReadSymbol === 'x') {
-    log(`erasing 'x'`);
-    write(BLANK); // E operation
-    changeState('first-r');
+    switch(sub_state) {
+    case 0:
+        log(`erasing 'x'`);
+        write(BLANK); // E operation
+        sub_state++;
+        break;
+    case 1:
+        changeState('first-r');
+        break;
+    }
   } else if (lastReadSymbol === SENTINEL) {
     changeState('find-digits'); // N operation
   } else {
@@ -576,12 +560,16 @@ function st_find_x() {
       case 1:
         log(`moving L again`);
         moveL(); // Second L
+        sub_state++;
+        break;
+      case 2:
         changeState('find-x'); // Reset for next cycle, stay in find-x
         break;
     }
   }
 }
 
+// Update Note: update logic to be consistent even thought it's equivalent
 // m-config | symbol | operations | final m-config
 // first-r | r | R, R | last-r
 // first-r | else | R, R | first-r
@@ -602,6 +590,9 @@ function st_first_r() {
         case 1:
             log(`moving R again`);
             moveR();
+            sub_state++;
+            break;
+        case 2:
             if (lastReadSymbol === 'r') {
                 changeState('last-r');
             } else {
@@ -648,7 +639,7 @@ function st_last_r() {
                 changeState('find-x');
                 break;
         }
-    } else {
+    } else if (lastReadSymbol === 'r') {
         switch(sub_state) {
             case 0:
                 log(`moving R`);
@@ -658,6 +649,9 @@ function st_last_r() {
             case 1:
                 log('moving R again');
                 moveR();
+                sub_state++;
+                break;
+            case 2:
                 changeState('last-r'); // Reset for next cycle
                 break;
         }
@@ -685,6 +679,9 @@ function st_find_digits() {
           case 1:
               log(`moving R again`);
               moveR();
+              sub_state++;
+              break;
+          case 2:
               changeState('find-1st-digit');
               break;
       }
@@ -698,12 +695,16 @@ function st_find_digits() {
           case 1:
               log(`moving L again`);
               moveL();
+              sub_state++;
+              break;
+          case 2:
               changeState('find-digits');
               break;
       }
   }
 }
 
+// Update Note: make this consistent with other formats; don't use switch at the read level, use if
 // m-config | symbol | operations | final m-config
 // find-1st-digit | x/y/z | L | ...
 // find-1st-digit | none | R, R | find-1st-digit
@@ -727,7 +728,7 @@ function st_find_1st_digit() {
       moveL();
       changeState('found-2nd-digit');
       break;
-    default: // Covers BLANK ('none') and other symbols
+    default: // Covers BLANK ('none') (and other symbols, but there shouldn't be other symbols)
       switch(sub_state) {
           case 0:
               log(`moving R`);
@@ -737,6 +738,9 @@ function st_find_1st_digit() {
           case 1:
               log(`moving R again`);
               moveR();
+              sub_state++;
+              break;
+          case 2:
               changeState('find-1st-digit');
               break;
       }
@@ -744,6 +748,7 @@ function st_find_1st_digit() {
   }
 }
 
+// Update Note: Reformat to be consistent
 // m-config | symbol | operations | final m-config
 // found-1st-digit | 0 | R | add-zero
 // found-1st-digit | 1 | R, R, R | find-2nd-digit
@@ -798,7 +803,7 @@ function st_find_2nd_digit() {
     log(`moving L`);
     moveL();
     changeState('found-2nd-digit');
-  } else {
+  } else if (lastReadSymbol === BLANK) {
     switch(sub_state) {
         case 0:
             log(`moving R`);
@@ -808,15 +813,20 @@ function st_find_2nd_digit() {
         case 1:
             log(`moving R again`);
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('find-2nd-digit');
             break;
     }
   }
 }
 
+// Update Note: make consistent
 // m-config | symbol | operations | final m-config
 // found-2nd-digit | 0 | R | add-zero
-// found-2nd-digit | 1/none | R | add-one
+// found-2nd-digit | 1 | R | add-one
+// found-2nd-digit | none | R | add-one
 function st_found_2nd_digit() {
   if (!inSubprocess) {
     lastReadSymbol = read();
@@ -862,6 +872,9 @@ function st_add_zero() {
         case 1:
             log(`moving R again`);
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('add-zero');
             break;
     }
@@ -899,6 +912,9 @@ function st_add_one() {
         case 2:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 3:
             changeState('carry');
             break;
     }
@@ -912,6 +928,9 @@ function st_add_one() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('add-one');
             break;
     }
@@ -952,15 +971,19 @@ function st_carry() {
           case 2:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+          case 3:
             changeState('carry'); // Reset for next cycle
             break;
       }
-  } else {
-      // Book doesn't specify but implies keep moving
-      log(`moving R`);
-      moveR();
-      changeState('carry');
-  }
+  } 
+  // else {
+  //     // Book doesn't specify but implies keep moving
+  //     log(`moving R`);
+  //     moveR();
+  //     changeState('carry');
+  // }
 }
 
 // m-config | symbol | operations | final m-config
@@ -984,6 +1007,9 @@ function st_add_finished() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('erase-old-x');
             break;
     }
@@ -997,12 +1023,16 @@ function st_add_finished() {
         case 1:
             log('moving L again');
             moveL();
+            sub_state++;
+            break;
+        case 2:
             changeState('add-finished');
             break;
     }
   }
 }
 
+// Update Note: Make format consistent and remove opSequence function
 // m-config | symbol | operations | final m-config
 // erase-old-x | x | E, L, L | print-new-x
 // erase-old-x | z | Py, L, L | print-new-x
@@ -1049,6 +1079,9 @@ function st_erase_old_x() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('erase-old-x');
             break;
     }
@@ -1077,6 +1110,9 @@ function st_print_new_x() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('erase-old-y');
             break;
     }
@@ -1117,6 +1153,9 @@ function st_erase_old_y() {
             case 2:
                 log('moving L again');
                 moveL();
+                sub_state++;
+                break;
+            case 3:
                 changeState('print-new-y');
                 break;
         }
@@ -1130,6 +1169,9 @@ function st_erase_old_y() {
             case 1:
                 log('moving R again');
                 moveR();
+                sub_state++;
+                break;
+            case 2:
                 changeState('erase-old-y');
                 break;
         }
@@ -1161,6 +1203,9 @@ function st_print_new_y() {
         case 1:
             log('moving R');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('reset-new-x');
             break;
     }
@@ -1188,6 +1233,9 @@ function st_reset_new_x() {
           case 1:
             log(`writing 'x'`);
             write('x');
+            sub_state++;
+            break;
+          case 2:
             changeState('flag-result-digits');
             break;
       }
@@ -1201,6 +1249,9 @@ function st_reset_new_x() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('reset-new-x');
             break;
     }
@@ -1234,6 +1285,9 @@ function st_flag_result_digits() {
           case 2:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+          case 3:
             changeState('unflag-result-digits');
             break;
       }
@@ -1253,6 +1307,9 @@ function st_flag_result_digits() {
         case 1:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+        case 2:
             changeState('flag-result-digits');
             break;
     }
@@ -1286,6 +1343,9 @@ function st_unflag_result_digits() {
             case 2:
                 log('moving R again');
                 moveR();
+                sub_state++;
+                break;
+            case 3:
                 changeState('unflag-result-digits'); // stay in state
                 break;
         }
@@ -1340,7 +1400,7 @@ function st_print_zero_digit() {
             sub_state++;
             break;
           case 1:
-            log('erasing marker on E');
+            log('erasing marker');
             write(BLANK);
             sub_state++;
             break;
@@ -1370,6 +1430,9 @@ function st_print_zero_digit() {
           case 3:
             log('moving R a third time');
             moveR();
+            sub_state++;
+            break;
+          case 4:
             changeState('cleanup');
             break;
       }
@@ -1423,6 +1486,9 @@ function st_print_one_digit() {
           case 2:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+          case 3:
             changeState('print-one-digit');
             break;
       }
@@ -1446,6 +1512,9 @@ function st_print_one_digit() {
           case 3:
             log('moving R third time');
             moveR();
+            sub_state++;
+            break;
+          case 4:
             changeState('cleanup');
             break;
       }
@@ -1464,30 +1533,33 @@ function st_cleanup() {
     }
     
     if (lastReadSymbol === BLANK) {
-        let markerFound = false;
-        for(let i = head; i < tape.length; i++) {
-            // Check for any non-blank, non-running-total symbol
-            if(tape[i] !== BLANK && !RT0.has(tape[i]) && !RT1.has(tape[i])) { 
-                markerFound = true;
-                break;
-            }
-        }
-        if (markerFound) {
-            log('found other markers, moving R to continue cleanup');
-            moveR();
-            changeState('cleanup');
-        } else {
-           log('no more markers, cleanup complete');
-           changeState('new');
-        }
+        // let markerFound = false;
+        // for(let i = head; i < tape.length; i++) {
+        //     // Check for any non-blank, non-running-total symbol
+        //     if(tape[i] !== BLANK && !RT0.has(tape[i]) && !RT1.has(tape[i])) { 
+        //         markerFound = true;
+        //         break;
+        //     }
+        // }
+        // if (markerFound) {
+        //     log('found other markers, moving R to continue cleanup');
+        //     moveR();
+        //     changeState('cleanup');
+        // } else {
+        //    log('no more markers, cleanup complete');
+        //    changeState('new');
+        // }
+        changeState('new');
     } else {
         switch(sub_state) {
             case 0:
                 // Erase only markers (x,y,z), not running total symbols
-                if (!RT0.has(lastReadSymbol) && !RT1.has(lastReadSymbol)) {
-                    log(`erasing marker`);
-                    write(BLANK);
-                }
+                // if (!RT0.has(lastReadSymbol) && !RT1.has(lastReadSymbol)) {
+                //     log(`erasing marker`);
+                //     write(BLANK);
+                // }
+                log(`erasing marker`);
+                write(BLANK);
                 sub_state++;
                 break;
             case 1:
@@ -1498,6 +1570,9 @@ function st_cleanup() {
             case 2:
                 log('moving R again');
                 moveR();
+                sub_state++;
+                break;
+            case 3:
                 changeState('cleanup');
                 break;
         }
