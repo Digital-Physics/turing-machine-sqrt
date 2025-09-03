@@ -1365,6 +1365,11 @@ function st_print_zero_digit() {
           case 2:
             log('moving R again');
             moveR();
+            sub_state++;
+            break;
+          case 3:
+            log('moving R a third time');
+            moveR();
             changeState('cleanup');
             break;
       }
@@ -1411,7 +1416,7 @@ function st_print_one_digit() {
             sub_state++;
             break;
           case 1:
-            log('erasing marker on E');
+            log('erasing marker');
             write(BLANK);
             sub_state++;
             break;

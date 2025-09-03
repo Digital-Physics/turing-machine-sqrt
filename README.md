@@ -6,4 +6,7 @@ it's still buggy. the first five digits are '10111' but it should be '10110' so 
 
 The site is hosted here:
 
+https://turing-machine-sqrt.onrender.com/
+
+
 
