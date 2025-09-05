@@ -1580,6 +1580,13 @@ document.getElementById("btnReset").addEventListener("click", ()=> {
   clearInterval(timer);
   initialize();
 });
+document.addEventListener('DOMContentLoaded', () => {
+  const btnRun = document.getElementById("btnRun");
+  
+  if (btnRun) {
+    btnRun.click(); // Programmatically click the button
+  }
+});
 </script>
 </body>
 </html>
